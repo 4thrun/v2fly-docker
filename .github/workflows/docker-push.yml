@@ -1,0 +1,57 @@
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "the tag version you want to build"
+  workflow_call:
+
+name: docker push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout codebase
+        uses: actions/checkout@v3
+
+      - name: setup qemu 
+        uses: docker/setup-qemu-action@v2
+
+      - name: setup docker buildx 
+        uses: docker/setup-buildx-action@v2
+
+      - name: login to docker hub 
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: get tag to build
+        id: tag
+        run: |
+          latest_tag=$(curl -sSL --retry 5 "https://api.github.com/repos/v2fly/v2ray-core/releases/latest" | jq -r ".tag_name")
+          if [[ -z "${{ github.event.inputs.tag }}" ]]; then
+            echo "Use the latest release tag of v2ray-core: ${latest_tag}"
+            echo "tag=${latest_tag}" >> $GITHUB_OUTPUT
+          else
+            echo "Use tag: ${{ github.event.inputs.tag }}"
+            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: set pushing to docker hub to true
+        run: echo "PUSH=true" >> $GITHUB_ENV
+
+      - name: prepare environment variables 
+        id: prepare
+        run: |
+          echo "docker_platforms=linux/amd64,linux/arm64" >> $GITHUB_OUTPUT
+          echo "docker_image=4thrun/v2fly-core" >> $GITHUB_OUTPUT
+          echo "docker_tag=${{ steps.tag.outputs.tag }}" >> $GITHUB_OUTPUT
+
+      - name: build tag & latest release 
+        run: |
+          docker buildx build --platform ${{ steps.prepare.outputs.docker_platforms }} \
+          --output "type=image,push=${{ steps.prepare.outputs.docker_is_push }}" \
+          --tag "${{ steps.prepare.outputs.docker_image }}:${{ steps.prepare.outputs.docker_tag }}" \
+          --tag "${{ steps.prepare.outputs.docker_image }}:latest" \
+          --build-arg TAG=${{ steps.prepare.outputs.docker_tag }} \
+          --file Dockerfile .
