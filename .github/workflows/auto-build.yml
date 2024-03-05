@@ -3,14 +3,14 @@ on:
   schedule:
     - cron: "0 0 * * 0"
 
-name: auto build docker image 
+name: Automated Docker image build 
 jobs:
   version-check:
     runs-on: ubuntu-latest
     outputs:
       ret: ${{ steps.version-check-result.outputs.ret }}
     steps:
-      - name: compare docker image version with v2fly's
+      - name: Compare Docker image version with official repository 
         id: version-check-result
         run: |
           v2fly_release=$(curl -sSL --retry 5 https://api.github.com/repos/v2fly/v2ray-core/releases/latest | jq -r ".tag_name")
